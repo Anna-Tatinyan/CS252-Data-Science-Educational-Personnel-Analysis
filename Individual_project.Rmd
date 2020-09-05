@@ -1,0 +1,471 @@
+---
+title: "Analysis of Educational Personnel in different Countries based on OECD data"
+author: 'Anna Tatinyan'
+output: pdf_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(RColorBrewer)
+
+```
+
+
+## The problem/data description
+
+This report is about Teaching Personnel in different countries based on the dataset from 2017 and 2018.
+This project aims to analyze the data and see the quality of teaching and learning around the world throughout 2 different periods of time. The goal is to find countries with higher and lower scores of the teaching quality and figure out the role of teachers in different countries.\
+It is interesting to determine the level of education in those countries and see the picture based on
+facts and not just predictions.
+The data comes from OECD.Stat [https://stats.oecd.org/Index.aspx?]()
+
+> We provide a unique forum and knowledge hub for data and analysis, exchange of experiences, 
+> best-practice sharing, and advice on public policies and international standard-setting. 
+> -- <cite> OECD.Stat </cite>
+                                                          
+Their source is \
+1.    Education at a Glance 2019 (2017)\
+2.    TALIS (Teaching and Learning International Survey) (2013,2018)
+
+Previously this data was used in many articles. For example \
+\
+1.    _Teaching and Learning International Survey (TALIS) 2018 Conceptual Framework_ written by _John Ainley_ and _Ralph Carstens_. In their work, they provided a general overview of surveys and the process of their implementations. Also, they addressed the priorities for pedagogical practices. \
+2.    _The Teaching and Learning International Survey Research Report (TALIS) 2018_ by _Prof John Jerrimand Sam Sims_. He analyzed the data paying attention mostly to England.
+
+
+
+## Main hypotheses
+
+My main hypotheses are the following
+
+1.    Find out the distribution of teachers by age, gender, and country. Highlight the countries that have more teachers in the categories mentioned above in 2018.
+2.    Find out the salary difference depending on the country and gender in 2017.
+3.    And finally, analyze the teaching and learning quality in different countries in 2018. Understand how satisfied teachers are about their jobs.
+
+
+
+## Analysis
+
+Let's start analyzing! :)
+
+First of all, we need to read the datasets into our environment and then clean the data, since we have a lot of datasets and only need specific columns in each of them. Moreover, we also need to clear the columns like Age, Country, etc. to make the dataset more easily readable. Also, we will keep only data about 2017,2018 years since the two sources we are going to use, have a little bit different data. \
+That is why to analyze teachers' distribution; we are going to use data from 2018 years. \
+To analyze data about salary, we are going to use only data from 2017. \
+And finally, to analyze data about class management and teachers' feedback, we will use data from 2018.
+
+```{r}
+#call all datasets into your environment
+# for the first hypothesis
+
+teachers <- read.csv("TALIS_Indicators_Who_the_teachers_are.csv")
+
+#for the second hypothesis
+
+teachers_salary <- read.csv("Teachers_actual_salaries.csv")
+
+
+#for the third hypothesis
+
+collaboration <- read.csv("TALIS_Indicators_Autonomy_collegiality_and_collaboration.csv")
+class_management <- read.csv("TALIS_Indicators_Classroom_management.csv")
+teacher_satisfaction <- read.csv("TALIS_Indicators_Teachers_satisfaction_with_their_jobs.csv")
+teachers_self_efficacy <- read.csv("TALIS_Indicators_Teachers_self_efficacy.csv")
+
+```
+
+
+```{r}
+#Cleaning the datasets
+# for the first hypothesis
+
+teachers <- teachers %>%
+  select(Country, Variable, MEASURE, Time, Value) 
+teachers <- teachers %>%
+    filter(complete.cases(teachers), MEASURE == "VAL", Variable %in% c("Female teachers", "Teachers' average age"), Time == 2018) %>%
+    select(-MEASURE)
+
+```
+
+```{r}
+#Cleaning the datasets
+# for the second hypothesis
+
+  
+teachers_salary <- teachers_salary %>%
+  select(Country, ISC11 , Age, SEX, Year, Value, INDICATOR)
+teachers_salary <- teachers_salary %>%
+    filter(complete.cases(teachers_salary), 
+           SEX != "T", INDICATOR == "USD_ACTL_YR") %>%
+    select(-INDICATOR)
+  
+```
+
+```{r}
+#Cleaning the datasets
+# for the third hypothesis
+
+collaboration <- collaboration %>%
+  select(Country, Variable, MEASURE, Time, Value) 
+collaboration <- collaboration %>%
+    filter(complete.cases(collaboration),  
+           MEASURE == "VAL", Time == 2018) %>%
+    select(-MEASURE)
+
+class_management <- class_management %>%
+  select(Country, Variable, MEASURE, Time, Value) 
+class_management <- class_management %>%
+    filter(complete.cases(class_management), 
+           MEASURE == "VAL", Time == 2018) %>%
+    select(-MEASURE)
+
+teacher_satisfaction <- teacher_satisfaction %>%
+  select(Country, Variable, MEASURE, Time, Value) 
+teacher_satisfaction <- teacher_satisfaction %>%
+    filter(complete.cases(teacher_satisfaction),
+           MEASURE == "VAL", Time == 2018) %>%
+    select(-MEASURE)
+
+teachers_self_efficacy <- teachers_self_efficacy %>%
+  select(Country, Variable, MEASURE, Time, Value) 
+teachers_self_efficacy <- teachers_self_efficacy %>%
+    filter(complete.cases(teachers_self_efficacy),
+           MEASURE == "VAL", Time == 2018) %>%
+    select(-MEASURE)
+  
+```
+
+```{r}
+#now let's mutate the columns to make them more readable 
+
+#First Hypothesis datasets
+
+pattern1 <- paste0(c("French com.", "CABA ", "Shanghai ", "Alberta ", "Flemish com. ", "England ", "Scotland "), collapse = "|")
+pattern2 <- paste0(c("Flemish Community of Belgium", "French Community of Belgium",
+                     "French com. (Belgium)", "Flemish com. (Belgium)"))
+
+#reduce rows and add new column
+ teachers <- teachers %>%
+   filter(Country != "OECD average", 
+          Country != pattern2[1], Country != pattern2[2]) %>%
+   mutate(Country = str_remove_all(Country, pattern = pattern1) %>%
+      str_trim('both') %>%
+      str_remove_all(pattern = "[\\(\\)]"))
+ teachers_gender <- teachers %>%
+   filter(Variable == "Female teachers") 
+ teachers_gender <- teachers_gender %>%
+   mutate(Male = 100 - teachers_gender[teachers_gender$Variable == "Female teachers", 4]) %>%
+   select(-c(Variable))
+ teachers_age <- teachers %>%
+   filter(Country != "OECD average", Variable == "Teachers' average age") %>%
+   select(-c(Variable))
+colnames(teachers_gender)[3] <- "Female"
+
+```
+
+```{r}
+
+#Second Hypothesis datasets
+#reduce column names
+
+teachers_salary <- teachers_salary %>%
+  filter(Country != pattern2[3], Country != pattern2[4]) %>%
+    mutate(
+      Country = str_remove_all(Country, pattern = pattern1) %>%
+      str_trim('both') %>%
+      str_remove_all(pattern = "[\\(\\)]"))
+```
+
+```{r}
+#Third Hypothesis datasets
+#reduce column names
+
+
+collaboration <- collaboration %>%
+  filter(Country != pattern2[1], Country != pattern2[2], 
+         Country != "OECD average", Country != "") %>%
+  mutate(Country = str_remove_all(Country, pattern = pattern1) %>%
+      str_remove_all(pattern = pattern2) %>%
+      str_trim('both') %>%
+      str_remove_all(pattern = "[\\(\\)]"))
+
+class_management <- class_management %>%
+  filter(Country != pattern2[1], Country != pattern2[2], 
+         Country != "OECD average", Country != "") %>%
+  mutate(Country = str_remove_all(Country, pattern = pattern1) %>%
+      str_remove_all(pattern = pattern2) %>%
+      str_trim('both') %>%
+      str_remove_all(pattern = "[\\(\\)]"))
+
+teacher_satisfaction <- teacher_satisfaction %>%
+  filter(Country != pattern2[1], Country != pattern2[2], 
+         Country != "OECD average", Country != "") %>%
+  mutate(Country = str_remove_all(Country, pattern = pattern1) %>%
+      str_remove_all(pattern = pattern2) %>%
+      str_trim('both') %>%
+      str_remove_all(pattern = "[\\(\\)]"))
+
+teachers_self_efficacy <- teachers_self_efficacy %>%
+  filter(Country != pattern2[1], Country != pattern2[2], 
+         Country != "OECD average", Country != "") %>%
+  mutate(Country = str_remove_all(Country, pattern = pattern1) %>%
+      str_remove_all(pattern = pattern2) %>%
+      str_trim('both') %>%
+      str_remove_all(pattern = "[\\(\\)]"))
+
+
+```
+
+After cleaning the data, we can start analyzing our data.
+First, let's see the bigger picture and determine the distribution of teachers by country, age and gender. This will help us to understand which country has more teachers. Are there countries with discrimination towards gender? (:D) 
+Enough talking. Let's get started!
+
+```{r, fig.width=9, fig.height=5}
+options(scipen=5)
+teachers_gender %>%
+  group_by(Female, Country) %>%
+  arrange(Female) %>%
+  ggplot(aes(x=reorder(Country, Female), y = Female, fill=Female)) + 
+  geom_histogram(stat = "identity") +
+  labs(title = "Distribution of female teachers in 2018",
+       x = "Country", y = "Percentage of women") +
+  theme_minimal() + 
+  theme(
+        legend.position  = "none", 
+                axis.text.x = element_text(angle = 90)) + 
+    scale_y_continuous(breaks = seq(0, 90, by = 10)) 
+
+
+```
+
+Let's discuss the top three 
+
+1.   In Latvia, there is significant discrimination, but not towards women! Around 90% of teachers are female! Russia and Lithuania have approximately 80%. In Latvia, Russia and Lithuania men clearly don't like to teach in schools :D
+2.    The least number of female teachers is in Japan! We see some "discrimination" again, but this time it is towards women. However, the difference isn't that big; women's percentage is a little bit more than 40. It's not that big of a difference compared to Latvia. \
+\
+Now let's analyze the average age. 
+
+```{r, fig.width=9, fig.height=5}
+teachers_age %>%
+  group_by(Value, Country) %>%
+  arrange(Value) %>%
+  ggplot(aes(x=reorder(Country, Value), y = Value, fill=Value)) + 
+  geom_histogram(stat = "identity") +
+  labs(title = "Distribution of teachers by age in 2018",
+       x = "Country", y = "Average age") +
+  theme_minimal() + 
+  theme( 
+        legend.position  = "none",
+        axis.text.x = element_text(angle = 90)) + 
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) 
+
+```
+
+From this graph we can see that 
+
+1.    In Georgia, the average age of teachers is pretty high - around 50 years old. In Lithuania, Estonia. Bulgaria, Portugal, Italy, and Latvia, the average age is approximately 48 - 50. 
+2.    The lowest average age of teachers is in Turkey - around 35. Not that young, though :D. Next, we have teachers in Malta with an average age of a little more than 36.\
+\
+Now let's analyze the salaries.
+
+From one of the sources, we can get information about teachers' salaries in 2017 based on the level of education program they work in. There are four levels of education L0, L1, L2_C4, and L3_C4. Let me explain all of them to make it clear. 
+
+1.    L0 is for Pre-primary education 
+2.    L1 is for Primary education 
+3.    L2_C4 is for Lower secondary general education 
+4.    L3_C4 is for Upper secondary general education 
+
+Let's check to find out if salaries are the same both for men and women.
+
+```{r}
+#check if Men get the same salary as women
+teachers_salary1 <- teachers_salary %>%
+  filter(SEX == "M") %>%
+  select(Value)
+
+teachers_salary2 <- teachers_salary %>%
+  filter(SEX == "F") %>%
+  select(Value)
+paste("Women are paid the same as men in each educational program -", unique(teachers_salary1$Value == teachers_salary2))
+
+#now let's delete Men or Women rows
+
+teachers_salary <- teachers_salary %>%
+  filter(SEX == "F") %>%
+  select(-c("SEX", "Year"))
+```
+
+Great, now we can further analyze our data. The age range is between 25-64 years. So we are going to analyze salaries by different levels of education and countries.
+
+```{r, fig.width=6, fig.height=5}
+teachers_salary %>%
+  ggplot(aes(x = Value,y = Country,fill = ISC11)) + 
+  geom_histogram(stat = "identity") +
+  facet_grid(.~ISC11) +
+  labs(title = "Distribution of salaries in different programs and countries in 2017",
+       x = "Salary", y = "Country") +
+  theme_minimal() + 
+  theme(plot.title = element_text(size=9), 
+        legend.position  = "none",
+        axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(0, 100000, by = 20000)) + xlim(c(0,81000))
+
+
+
+```
+
+Even though some countries miss some data, we can still see the bigger picture and conclude that 
+
+1.    Germany has the highest salaries for teachers in all educational programs except L0 (even though the data about L0 is missing, but we can still judge based on the rest levels).
+2.    The lowest salaries are in Latvia, Estonia, in L0 educational program. 
+3.    In general, the highest salaries are in Germany all levels in the Netherlands, Austria, and Australia. 
+
+Now let's start analyzing our data for the third hypothesis. \
+First, let's discuss the role of the teacher. How important is it? For me, it is enormous. Many teachers inspired me to become the person I am today, and they made me study very hard because I knew that nothing was easy to get. Moreover, they made me think out of the box so I could develop my ideas based only on my imagination. \
+To find out what teachers think about their role, let's draw a graph and make it easily readable, let's change some variables. 
+
+*    Q1 - Teachers who believe they can help their students to value learning
+
+*    Q2 - Teachers who believe they can help their students to think critically
+
+```{r, fig.width=9, fig.height=4}
+teachers_self_efficacy <- teachers_self_efficacy %>%
+  mutate(Variable = ifelse(
+    Variable == "Teachers who believe they can help their students to value learning", "Q1", "Q2")) 
+teachers_self_efficacy %>%
+  ggplot(aes(x = Value, y = Country, fill = Variable)) + 
+  geom_histogram(stat = "identity") +
+  facet_grid(Variable~.) +
+  labs(title = "Teachers' self-efficacy by countries in 2018",
+       x = "Percentage who agree", y = "Country") +
+  theme_minimal() + coord_flip() +
+  theme(
+        legend.position  = "none",
+        axis.text.x = element_text(angle = 90)) 
+```
+Let's discuss what we see 
+
+1.    For the question - teachers who believe they can help their students value learning, most of the countries have high percentages. The highest percentages are in countries like Columbia, Portugal and Viet Nam.
+The lowest percentage is in Japan. It's sad that for Japan we have such a small percentage - around 20-35%. 
+2.    For the question - teachers who believe they can help their students to think critically, most of the countries again have high percentages. At the top, we see again Columbia and Portugal. The lowest percentage is in Japan again. :( \
+\
+Now let's analyze teachers' motivation and satisfaction with their jobs. \
+For that purpose let's define again some questions.\
+
+*    Q1 - Teachers who 'agree' or 'strongly agree' that the teaching profession is valued in society
+
+*    Q2 - Teachers who are, all in all, satisfied with their job
+
+*    Q3 - Teachers who are satisfied with the salary they receive for their work
+
+*    Q4 - Teachers who, apart from their salary, are satisfied with the terms of their teaching contract/employment
+  
+```{r, fig.width=9, fig.height=6}
+teacher_satisfaction <- teacher_satisfaction %>%
+  mutate(Variable = case_when(
+      Variable == "Teachers who 'agree' or 'strongly agree' that the teaching profession is valued in society" ~ "Q1", 
+      Variable == "Teachers who are, all in all, satisfied with their job" ~ "Q2",
+      Variable == "Teachers who are satisfied with the salary they receive for their work" ~ "Q3", TRUE ~ "Q4")) 
+
+teacher_satisfaction %>%
+  ggplot(aes(x = Value, y = Country, fill = Variable)) +
+  geom_histogram(stat = "identity") +
+  facet_grid(Variable~.) +
+  labs(title = "Teachers' satisfaction with their jobs by countries in 2018",
+       x = "Percentage who agree", y = "Country") +
+  theme_minimal() + coord_flip() +
+  theme(
+        legend.position  = "none",
+        axis.text.x = element_text(angle = 90))
+```
+
+
+Let's discuss what we see \
+
+1.    For the question - teachers who 'agree' or 'strongly agree' that the teaching profession is valued in society, we have more low percentages than high. That is sad, to be honest :( Does that mean teachers don't think they are valued in society?
+The lowest percentage is in the Slovak Republic, and the highest is in Viet Nam.
+2.    For the question - teachers who are, all in all, satisfied with their job, most of the countries have high percentages. The highest percentages are in Mexico, Austria, Argentina, and Viet Nam. The lowest are in South Africa and the UK; however, they are still more than 75%.
+3.    For the question - teachers who are satisfied with the salary they receive for their work, most countries have low percentages. The lowest percentage is in Iceland, and the highest are in Canada, Singapore, and Austria, but not more than 75%. From previous graphs, we saw that Austria and Australia have high salaries and can see here too that teachers are satisfied with that :D (even though in Australia it is not the highest in this graph, but still more than 60%).
+4.    For the question - teachers who, apart from their salary, are satisfied with their teaching contract/employment terms, we have less very low percentages like in the previous graphs. The lowest percentage is in Portugal, and the highest are in Austria, Canada, and Georgia. Interestingly, Georgia has a small percentage of Q3; it seems like teachers are satisfied with their jobs apart from salary, but they are not so happy about the salary. \
+\
+Now let's analyze how much the school gives teachers the power to be a part of school decisions and choose their way of teaching based on the class they have and their preferences. \
+*    Q1 - Teachers who 'agree' or 'strongly agree' that they have control over determining course content
+
+*    Q2 - Teachers who 'agree' or 'strongly agree' that their school provides staff with opportunities to actively participate in school decisions
+
+*    Q3  - Principals who report that teachers have significant responsibility for the majority of tasks concerning school policies, instruction and curriculum
+
+```{r, fig.width=9, fig.height=5}
+collaboration <- collaboration %>%
+  mutate(Variable = case_when(
+      Variable == "Teachers who 'agree' or 'strongly agree' that they have control over determining course content" ~ "Q1", 
+      Variable == "Teachers who 'agree' or 'strongly agree' that their school provides staff with opportunities to actively participate in school decisions" ~ "Q2",
+      Variable == "Principals who report that teachers have significant responsibility for the majority of tasks concerning school policies, instruction and curriculum" ~ "Q3", TRUE ~ "")) %>%
+  filter(Variable != "")
+
+collaboration %>%
+  ggplot(aes(x = Value, y = Country, fill = Variable)) +
+  geom_histogram(stat = "identity") +
+  facet_grid(Variable~.) +
+  labs(title = "Teachers' collaboration and involvement by countries 2018",
+       x = "Percentage who agree", y = "Country") +
+  theme_minimal() + coord_flip() +
+  theme(
+        legend.position  = "none",
+        axis.text.x = element_text(angle = 90))
+```
+Let's discuss what we see \
+
+1.    For the question - teachers who 'agree' or 'strongly agree' that they have control over determining course content, the highest percentages are in Iceland, Korea, Norway, and Sweden, lowest in Portugal.
+2.    For the question - teachers who 'agree' or 'strongly agree' that their school provides staff with opportunities to actively participate in school decisions, the highest percentages are in Georgia and Vietnam, lowest in Chile.
+3.    For the question - principals who report that teachers have significant responsibility for the majority of tasks concerning school policies, instruction, and curriculum, the percentages are not that high as in previous graphs, the highest percentages are in Estonia and Italy. The lowest percentages are in Viet Name, Turkey, and Portugal (Saudia Arabia is 0, so not counted), where we can see that teachers don't have significant responsibility for the majority of tasks.  \
+
+Now let's analyze how teachers answered questions about classroom management. We all have seen teachers getting mad and furious when the class doesn't listen to them. Let's look at the statistics and find out what teachers think about that and how well-prepared they are. \
+
+*   Q1 - Teachers reporting a high level of need for professional development in student behavior and classroom management
+
+*   Q2 - Teachers who 'agree' or 'strongly agree' that they lose quite a lot of time because of students interrupting the lessons
+
+*   Q3 - Teachers for whom 'student behavior and classroom management' was included in their formal education or training
+
+*   Q4 - Teachers who felt 'well prepared' or 'very well prepared' for student behavior and classroom management
+
+*   Q5 - Teachers who feel that they can control disruptive behavior in the classroom
+
+```{r, fig.width=9, fig.height=6}
+class_management <- class_management %>%
+  mutate(Variable = case_when(
+      Variable == "Teachers reporting a high level of need for professional development in student behaviour and classroom management" ~ "Q1", 
+      Variable == "Teachers who 'agree' or 'strongly agree' that they lose quite a lot of time because of students interrupting the lessons" ~ "Q2",
+      Variable == "Teachers for whom 'student behaviour and classroom management' was included in their formal education or training" ~ "Q3",
+      Variable == "Teachers who felt 'well prepared' or 'very well prepared' for student behaviour and classroom management" ~ "Q4",
+      Variable == "Teachers who feel that they can control disruptive behaviour in the classroom" ~ "Q5",
+      TRUE ~ "")) %>%
+  filter(Variable != "")
+
+class_management %>%
+  ggplot(aes(x = Value, y = Country, fill = Variable)) +
+  geom_histogram(stat = "identity") +
+  facet_grid(Variable~.) +
+  labs(title = "Teachers class management issues and preparedness in 2018",
+       x = "Percentage who agree", y = "Country") +
+  theme_minimal() + coord_flip() +
+  theme(
+        legend.position  = "none",
+        axis.text.x = element_text(angle = 90))
+```
+Let's discuss what wee see \
+
+1.    For the question - teachers reporting a high level of need for professional development in student behavior and classroom management, we have really low percentages. The highest is in Viet Name, and the smallest are in UK, Canada.
+2.    For the question - teachers who 'agree' or 'strongly agree' that they lose quite a lot of time because of students interrupting the lessons, we see many low percentages again. The lowest percentages are in Georgia and Japan, and the highest are in Brazil and Spain. Good for Georgia :D
+3.    For the question - teachers for whom 'student behavior and classroom management' was included in their formal education or training, we have many high percentages. The highest percentages are in Viet Nam and UK. (well this is obvious from Q1) and the lowest are in Slovenia and Spain. 
+4.    For the question - teachers who felt 'well prepared' or 'very well prepared' for student behavior and classroom management, we see that the highest are in Viet Name (good for Viet Name :D again) and the United Arab Emirates. The lowest are in Austria, France, Iceland, and Finland.
+5.    For the question - teachers who feel that they can control disruptive behavior in the classroom, we have one missing value and many very high percentages. The lowest is in Japan, but it is still around 60%. The highest are in Portugal, Columbia, and Denmark. It is a good result because the importance of controlling the class is very significant. \
+\newpage
+To sum up, we understood that there is no discrimination in salaries (either for men or women); however, there is some bias towards gender in the number of teachers in different countries.
+ Also, we found out that teachers' self-efficacy is pretty high in many countries. Most of the teachers are satisfied with their jobs and terms of teaching and salaries (like in Canada with the highest percentage in salaries graph). Some of the countries, however, were not satisfied with their salaries like in Iceland. Moreover, many teachers answered that they can control their students' behavior, and they can participate in school discussions. \
+ 
